@@ -20,6 +20,8 @@ app.add_middleware(
 )
 
 @app.get("/")
+def hello():
+    return {"message": "OCR backend running"}
 def health_check():
     return {"message": "📄 Accounting PoC is live!"}
 @app.post("/api/generate-voucher")

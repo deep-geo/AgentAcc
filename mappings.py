@@ -34,12 +34,12 @@ MAPPING_RULES = {
         "debit_name": "管理费用-交通费",
         "credit_code": "220201",
         "credit_name": "其他应付款-员工报销"
+    },
     # ✅ 兜底规则：未匹配任何关键词时使用
     "其他支出": {
         "debit_code": "660299",
         "debit_name": "管理费用-其他",
         "credit_code": "220201",
         "credit_name": "其他应付款-员工报销"
-    }
     }
 }

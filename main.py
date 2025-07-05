@@ -1,6 +1,6 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from mappings import MAPPING_RULES
+from mappings import MAPPING_RULES, FUZZY_KEYWORDS
 from voucher import generate_voucher
 from PIL import Image
 import pytesseract
@@ -45,6 +45,12 @@ def call_gemini_category(text: str) -> str:
     except Exception as e:
         print("❌ Gemini出错：", e)
         return ""
+        
+def fuzzy_match(keyword: str) -> str:
+    for fuzzy, target in FUZZY_KEYWORDS.items():
+        if fuzzy in keyword:
+            return target
+    return None
 
 def extract_keyword_from_filename(filename: str) -> str:
     basename = Path(filename).stem

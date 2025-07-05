@@ -1,10 +1,16 @@
 # ---- 基础镜像，带 Python 和系统工具 ----
 FROM python:3.11-slim
 
-# ---- 安装系统依赖 ----
+# 安装依赖工具和中文OCR语言包
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
+    tesseract-ocr-chi-sim \
+    tesseract-ocr-chi-tra \
     poppler-utils \
+    libglib2.0-0 \
+    libsm6 \
+    libxrender1 \
+    libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- 设置工作目录并复制代码 ----

@@ -8,6 +8,7 @@ import io
 import re
 import datetime
 import google.generativeai as genai
+from pathlib import Path
 
 app = FastAPI()
 
@@ -45,6 +46,36 @@ def call_gemini_category(text: str) -> str:
         print("❌ Gemini出错：", e)
         return ""
 
+def extract_keyword_from_filename(filename: str) -> str:
+    basename = Path(filename).stem
+    for key in MAPPING_RULES.keys():
+        if key in basename:
+            return key
+    return None
+
+def classify_keyword(text: str, filename: str) -> str:
+    # Step 1: OCR 匹配
+    matched_key = next((k for k in MAPPING_RULES if k in text), None)
+    if matched_key:
+        print("🔍 OCR命中关键词：", matched_key)
+        return matched_key
+
+    # Step 2: Gemini 推理
+    gemini_key = call_gemini_category(text)
+    if gemini_key in MAPPING_RULES:
+        print("🤖 Gemini推荐关键词：", gemini_key)
+        return gemini_key
+
+    # Step 3: 文件名提取
+    filename_key = extract_keyword_from_filename(filename)
+    if filename_key in MAPPING_RULES:
+        print("📁 文件名提取关键词：", filename_key)
+        return filename_key
+
+    # Step 4: fallback
+    print("🚨 未识别关键词，使用默认分类")
+    return "其他支出"
+
 @app.post("/api/generate-voucher")
 async def generate_voucher_api(file: UploadFile = File(...)):
     try:
@@ -66,18 +97,27 @@ async def generate_voucher_api(file: UploadFile = File(...)):
         print("🧾 OCR识别结果：", text)
 
         # Step 1: 固定关键词匹配
-        matched_key = next((k for k in MAPPING_RULES if k in text), None)
+        #matched_key = next((k for k in MAPPING_RULES if k in text), None)
+        matched_key = classify_keyword(text, filename)
 
         # Step 2: Gemini 推理（如无匹配）
-        if not matched_key:
-            gemini_key = call_gemini_category(text)
-            print("🤖 Gemini建议关键词：", gemini_key)
-            if gemini_key in MAPPING_RULES:
-                matched_key = gemini_key
+        # if not matched_key:
+        #     gemini_key = call_gemini_category(text)
+        #     print("🤖 Gemini建议关键词：", gemini_key)
+        #     if gemini_key in MAPPING_RULES:
+        #         matched_key = gemini_key
 
-        # Step 3: 兜底分类
-        if not matched_key:
-            matched_key = "其他支出"
+        # # Step 3: 兜底分类
+        # if not matched_key:
+        #     matched_key = "其他支出"
+        #     MAPPING_RULES["其他支出"] = {
+        #         "debit_code": "660299",
+        #         "debit_name": "管理费用-其他",
+        #         "credit_code": "220201",
+        #         "credit_name": "其他应付款-员工报销"
+        #     }
+
+        if matched_key == "其他支出" and "其他支出" not in MAPPING_RULES:
             MAPPING_RULES["其他支出"] = {
                 "debit_code": "660299",
                 "debit_name": "管理费用-其他",
@@ -96,7 +136,8 @@ async def generate_voucher_api(file: UploadFile = File(...)):
         return {
             "matched_keyword": matched_key,
             "voucher": df.to_dict(orient="records"),
-            "amount": amount
+            "amount": amount,
+            "ocr_text": text 
         }
 
     except Exception as e:

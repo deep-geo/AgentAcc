@@ -6,11 +6,13 @@ from PIL import Image
 import pytesseract
 import io
 import re
+import os
 import datetime
 import google.generativeai as genai
 from pathlib import Path
 
 app = FastAPI()
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 # CORS middleware
 app.add_middleware(

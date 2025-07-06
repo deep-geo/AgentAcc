@@ -164,6 +164,17 @@ def classify_keyword(text: str, filename: str) -> str:
     print("🚨 fallback 到其他支出")
     return "其他支出"
 
+def extract_vendor_name(text: str) -> str:
+    """
+    从 OCR 文本中提取可能的销售方名称，选择最后一个匹配项作为销售方。
+    """
+    matches = re.findall(r"名称[:：]?\s*([^\n]{4,30})", text)
+    if matches:
+        chosen = matches[-1].strip()
+        print("🏢 提取到的公司名称候选：", matches)
+        print("✅ 选择最后一个公司名（销售方）：", chosen)
+        return chosen
+    return "自动识别商家"
 
 
 @app.post("/api/generate-voucher")
@@ -209,7 +220,8 @@ async def generate_voucher_api(file: UploadFile = File(...)):
 
         # 生成凭证
         subject = MAPPING_RULES[matched_key]
-        df = generate_voucher("自动识别商家", matched_key, amount, today, subject)
+        vendor = extract_vendor_name(text)
+        df = generate_voucher(vendor, matched_key, amount, today, subject)
         return {
             "matched_keyword": matched_key,
             "voucher": df.to_dict(orient="records"),

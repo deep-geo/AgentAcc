@@ -48,11 +48,47 @@ def call_gemini_category(text: str) -> str:
         print("❌ Gemini出错：", e)
         return ""
 
-def fuzzy_match(keyword: str) -> str:
-    for fuzzy, target in FUZZY_KEYWORDS.items():
-        if fuzzy in keyword:
-            return target
+# def fuzzy_match(keyword: str) -> str:
+#     for fuzzy, target in FUZZY_KEYWORDS.items():
+#         if fuzzy in keyword:
+#             return target
+#     return None
+
+def fuzzy_match(text: str) -> str:
+    for fuzzy in sorted(FUZZY_KEYWORDS, key=lambda k: -len(k)):
+        if fuzzy in text:
+            return FUZZY_KEYWORDS[fuzzy]
     return None
+
+# def parse_filename(filename: str) -> dict:
+#     basename = Path(filename).stem
+#     keyword = None
+#     amount = None
+#     date = None
+
+#     for key in MAPPING_RULES:
+#         if key in basename:
+#             keyword = key
+#             break
+
+#     if not keyword:
+#         fuzzy_key = fuzzy_match(basename)
+#         if fuzzy_key and fuzzy_key in MAPPING_RULES:
+#             keyword = fuzzy_key
+
+#     match_amount = re.search(r"(\d+\.\d{2})", basename)
+#     if match_amount:
+#         amount = float(match_amount.group(1))
+
+#     match_date = re.search(r"(\d{4}-\d{2}-\d{2})", basename)
+#     if match_date:
+#         date = match_date.group(1)
+
+#     return {
+#         "keyword": keyword,
+#         "amount": amount,
+#         "date": date
+#     }
 
 def parse_filename(filename: str) -> dict:
     basename = Path(filename).stem
@@ -60,11 +96,13 @@ def parse_filename(filename: str) -> dict:
     amount = None
     date = None
 
-    for key in MAPPING_RULES:
+    # ✅ 优先匹配最长关键词，避免“服务费”覆盖“外包服务”
+    for key in sorted(MAPPING_RULES, key=lambda k: -len(k)):
         if key in basename:
             keyword = key
             break
 
+    # ✅ 模糊匹配 fallback
     if not keyword:
         fuzzy_key = fuzzy_match(basename)
         if fuzzy_key and fuzzy_key in MAPPING_RULES:
@@ -126,6 +164,8 @@ def classify_keyword(text: str, filename: str) -> str:
     print("🚨 fallback 到其他支出")
     return "其他支出"
 
+
+
 @app.post("/api/generate-voucher")
 async def generate_voucher_api(file: UploadFile = File(...)):
     try:
@@ -173,7 +213,7 @@ async def generate_voucher_api(file: UploadFile = File(...)):
         return {
             "matched_keyword": matched_key,
             "voucher": df.to_dict(orient="records"),
-            "amount": amount,
+            "amount": f"{amount:.2f}",
             "ocr_text": text 
         }
 

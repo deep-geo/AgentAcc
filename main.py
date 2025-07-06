@@ -45,41 +45,83 @@ def call_gemini_category(text: str) -> str:
     except Exception as e:
         print("❌ Gemini出错：", e)
         return ""
-        
+
 def fuzzy_match(keyword: str) -> str:
     for fuzzy, target in FUZZY_KEYWORDS.items():
         if fuzzy in keyword:
             return target
     return None
 
-def extract_keyword_from_filename(filename: str) -> str:
+def parse_filename(filename: str) -> dict:
     basename = Path(filename).stem
-    for key in MAPPING_RULES.keys():
+    keyword = None
+    amount = None
+    date = None
+
+    for key in MAPPING_RULES:
         if key in basename:
-            return key
-    return None
+            keyword = key
+            break
+
+    if not keyword:
+        fuzzy_key = fuzzy_match(basename)
+        if fuzzy_key and fuzzy_key in MAPPING_RULES:
+            keyword = fuzzy_key
+
+    match_amount = re.search(r"(\d+\.\d{2})", basename)
+    if match_amount:
+        amount = float(match_amount.group(1))
+
+    match_date = re.search(r"(\d{4}-\d{2}-\d{2})", basename)
+    if match_date:
+        date = match_date.group(1)
+
+    return {
+        "keyword": keyword,
+        "amount": amount,
+        "date": date
+    }
 
 def classify_keyword(text: str, filename: str) -> str:
-    # Step 1: OCR 匹配
-    matched_key = next((k for k in MAPPING_RULES if k in text), None)
-    if matched_key:
-        print("🔍 OCR命中关键词：", matched_key)
-        return matched_key
+    # Step 1: 文件名匹配（精确）
+    parsed = parse_filename(filename)
+    filename_key = parsed.get("keyword")
+    if filename_key in MAPPING_RULES:
+        print("📁 文件名关键词：", filename_key)
+        return filename_key
 
-    # Step 2: Gemini 推理
+    # Step 1b: 文件名模糊匹配
+    mapped = fuzzy_match(filename_key or "")
+    if mapped and mapped in MAPPING_RULES:
+        print("📁 文件名模糊匹配：", filename_key, "→", mapped)
+        return mapped
+
+    # Step 2: OCR 精确匹配
+    for key in MAPPING_RULES:
+        if key in text:
+            print("🔍 OCR命中关键词：", key)
+            return key
+
+    # Step 2b: OCR 模糊匹配
+    mapped = fuzzy_match(text)
+    if mapped and mapped in MAPPING_RULES:
+        print("🌀 OCR模糊匹配：→", mapped)
+        return mapped
+
+    # Step 3: Gemini 推理
     gemini_key = call_gemini_category(text)
     if gemini_key in MAPPING_RULES:
         print("🤖 Gemini推荐关键词：", gemini_key)
         return gemini_key
 
-    # Step 3: 文件名提取
-    filename_key = extract_keyword_from_filename(filename)
-    if filename_key in MAPPING_RULES:
-        print("📁 文件名提取关键词：", filename_key)
-        return filename_key
+    # Step 3b: Gemini 模糊匹配
+    mapped = fuzzy_match(gemini_key or "")
+    if mapped and mapped in MAPPING_RULES:
+        print("🤖 Gemini模糊匹配：", gemini_key, "→", mapped)
+        return mapped
 
     # Step 4: fallback
-    print("🚨 未识别关键词，使用默认分类")
+    print("🚨 fallback 到其他支出")
     return "其他支出"
 
 @app.post("/api/generate-voucher")
@@ -102,26 +144,7 @@ async def generate_voucher_api(file: UploadFile = File(...)):
         text = pytesseract.image_to_string(image, lang="chi_sim+eng")
         print("🧾 OCR识别结果：", text)
 
-        # Step 1: 固定关键词匹配
-        #matched_key = next((k for k in MAPPING_RULES if k in text), None)
         matched_key = classify_keyword(text, filename)
-
-        # Step 2: Gemini 推理（如无匹配）
-        # if not matched_key:
-        #     gemini_key = call_gemini_category(text)
-        #     print("🤖 Gemini建议关键词：", gemini_key)
-        #     if gemini_key in MAPPING_RULES:
-        #         matched_key = gemini_key
-
-        # # Step 3: 兜底分类
-        # if not matched_key:
-        #     matched_key = "其他支出"
-        #     MAPPING_RULES["其他支出"] = {
-        #         "debit_code": "660299",
-        #         "debit_name": "管理费用-其他",
-        #         "credit_code": "220201",
-        #         "credit_name": "其他应付款-员工报销"
-        #     }
 
         if matched_key == "其他支出" and "其他支出" not in MAPPING_RULES:
             MAPPING_RULES["其他支出"] = {
@@ -132,9 +155,15 @@ async def generate_voucher_api(file: UploadFile = File(...)):
             }
 
         # 提取金额
+        # 使用文件名优先提取 amount 和 date
+        parsed = parse_filename(filename)
+
+        # 金额优先来自文件名，其次 OCR
         match = re.search(r"(\d+\.\d{2})", text)
-        amount = float(match.group(1)) if match else 0.0
-        today = datetime.date.today().isoformat()
+        amount = parsed.get("amount") or (float(match.group(1)) if match else 0.0)
+
+        # 日期优先来自文件名，其次今天
+        today = parsed.get("date") or datetime.date.today().isoformat()
 
         # 生成凭证
         subject = MAPPING_RULES[matched_key]

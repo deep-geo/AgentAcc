@@ -48,47 +48,12 @@ def call_gemini_category(text: str) -> str:
         print("❌ Gemini出错：", e)
         return ""
 
-# def fuzzy_match(keyword: str) -> str:
-#     for fuzzy, target in FUZZY_KEYWORDS.items():
-#         if fuzzy in keyword:
-#             return target
-#     return None
-
 def fuzzy_match(text: str) -> str:
     for fuzzy in sorted(FUZZY_KEYWORDS, key=lambda k: -len(k)):
         if fuzzy in text:
             return FUZZY_KEYWORDS[fuzzy]
     return None
 
-# def parse_filename(filename: str) -> dict:
-#     basename = Path(filename).stem
-#     keyword = None
-#     amount = None
-#     date = None
-
-#     for key in MAPPING_RULES:
-#         if key in basename:
-#             keyword = key
-#             break
-
-#     if not keyword:
-#         fuzzy_key = fuzzy_match(basename)
-#         if fuzzy_key and fuzzy_key in MAPPING_RULES:
-#             keyword = fuzzy_key
-
-#     match_amount = re.search(r"(\d+\.\d{2})", basename)
-#     if match_amount:
-#         amount = float(match_amount.group(1))
-
-#     match_date = re.search(r"(\d{4}-\d{2}-\d{2})", basename)
-#     if match_date:
-#         date = match_date.group(1)
-
-#     return {
-#         "keyword": keyword,
-#         "amount": amount,
-#         "date": date
-#     }
 
 def parse_filename(filename: str) -> dict:
     basename = Path(filename).stem
@@ -166,14 +131,23 @@ def classify_keyword(text: str, filename: str) -> str:
 
 def extract_vendor_name(text: str) -> str:
     """
-    从 OCR 文本中提取可能的销售方名称，选择最后一个匹配项作为销售方。
+    提取销售方公司名称：匹配所有“名称:xxx”字段，排除“项目名称”、“规格型号”等噪音信息，取最后一个可能的公司名。
     """
-    matches = re.findall(r"名称[:：]?\s*([^\n]{4,30})", text)
-    if matches:
-        chosen = matches[-1].strip()
-        print("🏢 提取到的公司名称候选：", matches)
+    # 提取所有 名称: xxx
+    candidates = re.findall(r"名称[:：]?\s*([^\n]{4,30})", text)
+    
+    # 排除常见非公司名称字段（如“项目名称”、“单价”、“单位”等）
+    filtered = [
+        c.strip() for c in candidates
+        if not any(excl in c for excl in ["项目名称", "规格", "单价", "单位", "数量", "税额", "价税"])
+    ]
+
+    if filtered:
+        chosen = filtered[-1]
+        print("🏢 可疑公司名称候选：", filtered)
         print("✅ 选择最后一个公司名（销售方）：", chosen)
         return chosen
+    
     return "自动识别商家"
 
 

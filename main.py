@@ -41,7 +41,7 @@ def call_gemini_category(text: str) -> str:
 常见关键词包括：奶茶、饮品、出租车、滴滴、打车、差旅、办公用品、软件、快递、住宿、水电等。
 """
     try:
-        model = genai.GenerativeModel("gemini-pro")
+        model = genai.GenerativeModel("gemini-1.5-pro")
         response = model.generate_content(prompt)
         return response.text.strip().replace("\n", "")
     except Exception as e:
